@@ -1,107 +1,102 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import random
 
-st.set_page_config(page_title="Wheel of Names Clone", layout="wide")
+st.set_page_config(page_title="Wheel of Names", layout="wide")
 
-# ส่วนเมนูด้านข้าง
+# 1. ส่วนของ Sidebar (ฝั่ง Python)
 with st.sidebar:
     st.header("รายการชื่อ")
-    input_names = st.text_area("ใส่ชื่อ (1 ชื่อต่อบรรทัด)", 
-                              "Ali\nBeatriz\nCharles\nDiya\nEric\nFatima\nGabriel\nHanna", 
-                              height=400)
+    # ใส่ชื่อเริ่มต้นไว้ให้เลย
+    default_names = "Ali\nBeatriz\nCharles\nDiya\nEric\nFatima\nGabriel\nHanna"
+    input_names = st.text_area("1 ชื่อต่อบรรทัด", value=default_names, height=400)
+    
+    # แปลงจาก Text เป็น List สำหรับส่งให้ JavaScript
     name_list = [n.strip() for n in input_names.split('\n') if n.strip()]
 
-# ส่วนแสดงผลหลัก
-if len(name_list) > 0:
-    # เราจะรวม HTML, CSS และ JS ไว้ในก้อนเดียวเพื่อให้ทำงานร่วมกันได้แม่นยำ
-    wheel_html = f"""
+# 2. ส่วนแสดงผลวงล้อและปุ่มควบคุม (ฝั่ง HTML/JS)
+if name_list:
+    html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
     <style>
-        body {{ font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }}
+        body {{ font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; padding-top: 20px; background-color: white; }}
+        .main-layout {{ display: flex; gap: 50px; align-items: flex-start; }}
         
-        .wheel-wrapper {{
-            position: relative;
-            width: 500px;
-            height: 500px;
-        }}
-
-        /* --- ลูกศรชี้ (Pointer) --- */
+        .wheel-box {{ position: relative; width: 550px; height: 550px; }}
+        
+        /* ลูกศรชี้ด้านข้าง (สีทอง) */
         .arrow {{
-            position: absolute;
-            right: -20px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 0; 
-            height: 0; 
-            border-top: 25px solid transparent;
-            border-bottom: 25px solid transparent;
-            border-right: 50px solid #FFD700; /* สีทองชี้จากขวาเข้าหาล้อ */
-            z-index: 100;
-            filter: drop-shadow(-2px 2px 3px rgba(0,0,0,0.5));
+            position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+            width: 0; height: 0; 
+            border-top: 20px solid transparent; border-bottom: 20px solid transparent;
+            border-right: 40px solid #FFD700; z-index: 100;
         }}
 
-        /* --- Popup (Modal) --- */
-        #modal {{
+        .controls {{ display: flex; flex-direction: column; gap: 10px; align-items: center; }}
+        
+        button {{
+            padding: 12px 25px; border: none; border-radius: 5px; cursor: pointer;
+            font-weight: bold; font-size: 16px; width: 150px;
+        }}
+        .btn-spin {{ background: #ff4b4b; color: white; font-size: 20px; width: 200px; border-radius: 50px; }}
+        .btn-shuffle {{ background: #3498db; color: white; }}
+
+        /* Popup ผู้ชนะ */
+        #winner-modal {{
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: none;
-            justify-content: center; align-items: center; z-index: 1000;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000;
         }}
         .modal-content {{
-            background: white; padding: 40px; border-radius: 20px;
-            text-align: center; box-shadow: 0 0 20px rgba(255,255,255,0.2);
-            min-width: 300px;
+            background: white; padding: 50px; border-radius: 20px; text-align: center;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5); min-width: 350px;
         }}
-        .winner-name {{ color: #ff4b4b; font-size: 3rem; margin: 20px 0; font-weight: bold; }}
-        
-        button#spin-btn {{
-            margin-top: 20px; padding: 15px 40px; font-size: 20px;
-            background: #ff4b4b; color: white; border: none; border-radius: 50px;
-            cursor: pointer; transition: 0.2s;
-        }}
-        button#spin-btn:hover {{ background: #ff2b2b; transform: scale(1.05); }}
+        .winner-name {{ color: #ff4b4b; font-size: 4rem; font-weight: bold; margin: 20px 0; }}
     </style>
     </head>
     <body>
 
-    <div class="wheel-wrapper">
-        <div class="arrow"></div>
-        <canvas id="wheel" width="500" height="500"></canvas>
+    <div class="main-layout">
+        <div class="wheel-box">
+            <div class="arrow"></div>
+            <canvas id="wheel" width="550" height="550"></canvas>
+        </div>
+
+        <div class="controls">
+            <button class="btn-spin" onclick="spin()">หมุน!</button>
+            <button class="btn-shuffle" onclick="shuffleNames()">🔀 สลับชื่อ</button>
+        </div>
     </div>
 
-    <button id="spin-btn" onclick="spin()">กดเพื่อหมุน!</button>
-
-    <div id="modal">
+    <div id="winner-modal">
         <div class="modal-content">
-            <h2>ยินดีด้วย! ผู้ชนะคือ</h2>
+            <h2 style="color: #666;">ผู้ชนะคือ...</h2>
             <div id="winner-text" class="winner-name"></div>
-            <button onclick="closeModal()" style="padding: 10px 20px; cursor:pointer;">ตกลง</button>
+            <button onclick="closeModal()" style="background:#ddd; width: 100px;">ปิด</button>
         </div>
     </div>
 
     <script>
-        const names = {name_list};
+        let items = {name_list};
         const colors = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
         const canvas = document.getElementById('wheel');
         const ctx = canvas.getContext('2d');
         let currentAngle = 0;
 
         function draw() {{
-            const arc = (Math.PI * 2) / names.length;
-            ctx.clearRect(0,0,500,500);
-            names.forEach((name, i) => {{
+            const arc = (Math.PI * 2) / items.length;
+            ctx.clearRect(0,0,550,550);
+            items.forEach((name, i) => {{
                 const angle = currentAngle + i * arc;
                 ctx.fillStyle = colors[i % colors.length];
                 ctx.beginPath();
-                ctx.moveTo(250, 250);
-                ctx.arc(250, 250, 240, angle, angle + arc);
+                ctx.moveTo(275, 275);
+                ctx.arc(275, 275, 260, angle, angle + arc);
                 ctx.fill();
                 ctx.stroke();
 
                 ctx.save();
-                ctx.translate(250 + Math.cos(angle + arc/2) * 160, 250 + Math.sin(angle + arc/2) * 160);
+                ctx.translate(275 + Math.cos(angle + arc/2) * 180, 275 + Math.sin(angle + arc/2) * 180);
                 ctx.rotate(angle + arc/2);
                 ctx.fillStyle = "white";
                 ctx.font = "bold 20px Arial";
@@ -111,10 +106,18 @@ if len(name_list) > 0:
             }});
         }}
 
+        function shuffleNames() {{
+            for (let i = items.length - 1; i > 0; i--) {{
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }}
+            draw();
+        }}
+
         function spin() {{
-            let duration = 4000;
+            let duration = 5000;
             let start = null;
-            let totalRotation = Math.PI * 2 * (8 + Math.random() * 5);
+            let totalRotation = Math.PI * 2 * (10 + Math.random() * 5);
 
             function animate(now) {{
                 if (!start) start = now;
@@ -127,20 +130,20 @@ if len(name_list) > 0:
                 if (progress < 1) {{
                     requestAnimationFrame(animate);
                 }} else {{
-                    const arc = (Math.PI * 2) / names.length;
-                    // คำนวณผู้ชนะ (ตำแหน่ง 0 องศาคือด้านขวาที่ลูกศรชี้)
+                    const arc = (Math.PI * 2) / items.length;
                     const normalizedAngle = (currentAngle % (Math.PI * 2));
-                    const index = Math.floor((names.length - (normalizedAngle / arc)) % names.length);
+                    // 0 องศาคือด้านขวาที่ลูกศรชี้
+                    const index = Math.floor((items.length - (normalizedAngle / arc)) % items.length);
                     
-                    document.getElementById('winner-text').innerText = names[index];
-                    document.getElementById('modal').style.display = 'flex';
+                    document.getElementById('winner-text').innerText = items[index];
+                    document.getElementById('winner-modal').style.display = 'flex';
                 }}
             }}
             requestAnimationFrame(animate);
         }}
 
         function closeModal() {{
-            document.getElementById('modal').style.display = 'none';
+            document.getElementById('winner-modal').style.display = 'none';
         }}
 
         draw();
@@ -148,7 +151,6 @@ if len(name_list) > 0:
     </body>
     </html>
     """
-    # ขยาย height เป็น 800 เพื่อให้ Popup ไม่โดนตัดขอบ
-    components.html(wheel_html, height=800)
+    components.html(html_code, height=700)
 else:
-    st.info("เพิ่มชื่อที่ด้านซ้ายเพื่อเริ่มสนุก!")
+    st.warning("กรุณาใส่ชื่อที่แถบด้านซ้ายก่อนครับ")
